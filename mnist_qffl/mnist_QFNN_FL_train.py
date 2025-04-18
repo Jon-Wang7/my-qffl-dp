@@ -8,7 +8,7 @@ from sklearn.mixture import GaussianMixture
 from tqdm import tqdm
 
 
-BATCH_SIZE=600
+BATCH_SIZE=128
 EPOCH=5
 LR=0.1
 DEVICE=torch.device('cpu')
@@ -58,9 +58,8 @@ for i in range(node):
                                                 shuffle = True)
 
     for epoch in range(EPOCH):
-        print(f'=======================node:{i}  epoch:{epoch}=======================')
-    
-        for its,(x,y) in enumerate(tqdm(train_data_loader)):
+        progress_bar = tqdm(train_data_loader, desc=f"Node {i} | Epoch {epoch}")
+        for x, y in progress_bar:
 
             model.train()
             x=x.to(DEVICE)
@@ -70,7 +69,12 @@ for i in range(node):
             train_loss_list.append(loss.item())
             acc=acc_cal(output,y)
             train_acc_list.append(acc)
-            tqdm.write(f'loss:{loss.item()}  acc:{acc}')
+            # tqdm.write(f'loss:{loss.item()}  acc:{acc}')
+            avg_loss = sum(train_loss_list[-len(train_data_loader):]) / len(train_data_loader)
+            avg_acc = sum(train_acc_list[-len(train_data_loader):]) / len(train_data_loader)
+            # print(f'[Summary] node:{i} epoch:{epoch} - avg_loss:{avg_loss:.4f} avg_acc:{avg_acc:.4f}')
+            progress_bar.set_postfix(loss=f"{avg_loss:.4f}", acc=f"{avg_acc:.4f}")
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
