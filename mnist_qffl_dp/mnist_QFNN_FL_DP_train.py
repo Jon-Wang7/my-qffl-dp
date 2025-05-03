@@ -89,7 +89,7 @@ for noise in noise_multipliers:
             'final_test_acc': 0
         }
 
-        print(f'params: {noise}, {l2_norm}' )
+        print(f'params: {noise}, {l2_norm}')
         for i in range(node):
             model = Qfnn(DEVICE).to(DEVICE)
             optimizer = pyvacy_optim.DPSGD(
@@ -186,12 +186,16 @@ for noise in noise_multipliers:
             node_results['epsilons'].append(epsilon)
 
             # 保存训练记录
-            torch.save(train_loss_list, f'../result/data/mni_qffl_dp/noise_{noise}_clip_{l2_norm}_{NAME}_train_loss_n{i}.pt')
-            torch.save(train_acc_list, f'../result/data/mni_qffl_dp/noise_{noise}_clip_{l2_norm}_{NAME}_train_acc_n{i}.pt')
-            torch.save(test_acc_list, f'../result/data/mni_qffl_dp/noise_{noise}_clip_{l2_norm}_{NAME}_test_acc_n{i}.pt')
+            torch.save(train_loss_list,
+                       f'../result/data/mni_qffl_dp/noise_{noise}_clip_{l2_norm}_{NAME}_train_loss_n{i}.pt')
+            torch.save(train_acc_list,
+                       f'../result/data/mni_qffl_dp/noise_{noise}_clip_{l2_norm}_{NAME}_train_acc_n{i}.pt')
+            torch.save(test_acc_list,
+                       f'../result/data/mni_qffl_dp/noise_{noise}_clip_{l2_norm}_{NAME}_test_acc_n{i}.pt')
 
             # 保存完整模型（非 best，仅最后一轮）
-            torch.save(model.state_dict(), f'../result/model/mni_qffl_dp/last_noise_{noise}_clip_{l2_norm}_{NAME}_n{i}.pth')
+            torch.save(model.state_dict(),
+                       f'../result/model/mni_qffl_dp/last_noise_{noise}_clip_{l2_norm}_{NAME}_n{i}.pth')
 
         node_results['final_acc'] = np.mean(node_results['accuracies'])
         node_results['final_test_acc'] = np.mean(node_results['test_accuracies'])

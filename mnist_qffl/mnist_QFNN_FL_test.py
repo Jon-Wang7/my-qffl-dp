@@ -54,7 +54,7 @@ f1 = f1_score(label, pred, average='macro')
 print(f'acc:{acc} precision:{precision} recall:{recall} f1:{f1}')
 cm = confusion_matrix(label, pred)
 # === 保存预测结果和融合权重（用于隐私评估） ===
-torch.save(output, '../result/data/mni_qffl/output_probs.pt')          # [batch, class]
-torch.save(gmm_scores, '../result/data/mni_qffl/lambda_weights.pt')    # [batch, node]
+torch.save(output, '../result/data/mni_qffl/output_probs.pt')  # [batch, class]
+torch.save(gmm_scores, '../result/data/mni_qffl/lambda_weights.pt')  # [batch, node]
 
 print("预测输出和 GMM 权重已保存！")

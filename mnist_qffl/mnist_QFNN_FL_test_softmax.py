@@ -64,7 +64,7 @@ print(f'acc: {acc:.4f}  precision: {precision:.4f}  recall: {recall:.4f}  f1: {f
 cm = confusion_matrix(label, pred)
 
 # === 保存预测结果和融合权重（用于隐私评估） ===
-torch.save(output, '../result/data/mni_qffl/output_probs.pt')          # ✅ 正确保存预测输出
+torch.save(output, '../result/data/mni_qffl/output_probs.pt')  # ✅ 正确保存预测输出
 torch.save(lambda_weights, '../result/data/mni_qffl/lambda_weights.pt')  # ✅ 正确保存 softmax 后的 λ 权重
 
 print("预测输出和 GMM 权重已保存！")

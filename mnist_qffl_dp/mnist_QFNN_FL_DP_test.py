@@ -4,6 +4,7 @@ from mni_QFNN_DP import Qfnn
 from common.utils import setup_seed
 import numpy as np
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, f1_score
+
 # 参数空间
 noise_list = [0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5]
 clip_list = [1, 5, 10, 20]
@@ -18,11 +19,11 @@ label = torch.load('../data/mnist/test_label.pkl').to(DEVICE)[:2000]
 
 
 def run_test(noise, clip):
-
     global label
     gmm_list = torch.load(f'../result/data/mni_qffl_dp/noise_{noise}_clip_{clip}_mnist_QFNN_gas_q4_star_gmm_list',
                           weights_only=False)
-    data_weights = torch.load(f'../result/data/mni_qffl_dp/noise_{noise}_clip_{clip}_mnist_QFNN_gas_q4_star_data_weights')
+    data_weights = torch.load(
+        f'../result/data/mni_qffl_dp/noise_{noise}_clip_{clip}_mnist_QFNN_gas_q4_star_data_weights')
     gmm_scores = []
     for i in range(node):
         gmm_scores.append(gmm_list[i].score_samples(test_data.cpu().numpy()))

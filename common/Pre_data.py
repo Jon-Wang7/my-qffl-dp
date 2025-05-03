@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset
-import numpy as np
+
 
 class Z_Data(Dataset):
     def __init__(self, data_type, image_type):
@@ -18,9 +18,9 @@ class Z_Data(Dataset):
             val_size = int(0.1 * len(train_data))
             self.data = train_data[:val_size]
             self.label = train_label[:val_size]
-            
+
     def __getitem__(self, index):
         return self.data[index], self.label[index]
-        
+
     def __len__(self):
-        return len(self.data) 
+        return len(self.data)
