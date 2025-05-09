@@ -1,73 +1,13 @@
 import torch
 import torch.nn as nn
-from mni_QFNN_DP_QN import Qfnn
+from mni_QFNN_DP_LN import Qfnn
 import numpy as np
 from common.utils import acc_cal, setup_seed
 from torchvision import transforms
 from sklearn.mixture import GaussianMixture
-from pyvacy import optim as pyvacy_optim
-from pyvacy.analysis import moments_accountant
 from tqdm import tqdm
 import json
 import os
-
-import pennylane as qml
-
-import pennylane as qml
-import torch
-import numpy as np
-
-
-def generate_quantum_noise_realistic(shape, device='cpu', scale=0.1):
-    flat_dim = int(np.prod(shape))
-    n_qubits = max(2, min(8, flat_dim))
-
-    dev = qml.device("default.mixed", wires=n_qubits)
-
-    @qml.qnode(dev, interface="torch")
-    def noisy_circuit():
-        for i in range(n_qubits):
-            qml.Hadamard(wires=i)
-            qml.DepolarizingChannel(0.05, wires=i)
-        return qml.math.stack([qml.expval(qml.PauliZ(i)) for i in range(n_qubits)])
-
-    reps = int(np.ceil(flat_dim / n_qubits))
-    samples = []
-
-    for _ in range(reps):
-        sample = noisy_circuit()
-        if not isinstance(sample, torch.Tensor):
-            sample = torch.tensor(sample)
-        samples.append(sample)
-
-    noise_vector = torch.cat(samples)[:flat_dim]
-    noise_vector = noise_vector.view(*shape).to(device) * scale
-    return noise_vector
-
-
-def generate_quantum_noise(shape, device='cpu', scale=0.1):
-    flat_dim = int(np.prod(shape))  # 展平后总长度
-    n_qubits = max(2, min(8, flat_dim))  # 控制 qubit 数
-
-    dev = qml.device("default.qubit", wires=n_qubits)
-
-    @qml.qnode(dev, interface="torch")
-    def noise_circuit():
-        for i in range(n_qubits):
-            qml.Hadamard(wires=i)
-        return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
-
-    reps = int(np.ceil(flat_dim / n_qubits))  # 需要重复几次电路
-    noise_vals = []
-
-    for _ in range(reps):
-        output = torch.tensor(noise_circuit())
-        noise_vals.append(output)
-
-    noise_vector = torch.cat(noise_vals)[:flat_dim]  # 截断到总长度
-    noise_vector = noise_vector.view(*shape).to(device) * scale
-    return noise_vector
-
 
 BATCH_SIZE = 128
 EPOCH = 10
@@ -79,24 +19,19 @@ MIN_EPOCHS = 3
 
 setup_seed(777)
 
-transform = transforms.Compose([transforms.ToTensor()])
-
 train_data = torch.load('../data/mnist/train_data.pkl').cpu().numpy()
 train_label = torch.load('../data/mnist/train_label.pkl').cpu().numpy()
 test_data = torch.load('../data/mnist/test_data.pkl').cpu().numpy()
 test_label = torch.load('../data/mnist/test_label.pkl').cpu().numpy()
 
 all_len = len(train_label)
-
 gmm_list = []
 weights = []
 
-NAME = f'mnist_QFNN_gas_q4_star'
+NAME = f'mnist_QFNN_laplace_q4_star'
 node = 9
-
 noise_multipliers = [0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5]
 l2_norm_clips = [1, 5, 10, 20]
-
 
 class EarlyStopping:
     def __init__(self, patience=PATIENCE, min_delta=MIN_DELTA, mode='max', min_epochs=MIN_EPOCHS):
@@ -113,23 +48,19 @@ class EarlyStopping:
         self.epoch += 1
         if self.epoch < self.min_epochs:
             return False
-
         if self.best_value is None:
             self.best_value = value
         elif (self.mode == 'max' and value <= self.best_value + self.min_delta) or \
-                (self.mode == 'min' and value >= self.best_value - self.min_delta):
+             (self.mode == 'min' and value >= self.best_value - self.min_delta):
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
         else:
             self.best_value = value
             self.counter = 0
-
         return self.early_stop
 
-
 keep_list = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [0, 8], [0, 9]]
-
 results = {
     'noise_multipliers': noise_multipliers,
     'l2_norm_clips': l2_norm_clips,
@@ -150,13 +81,7 @@ for noise in noise_multipliers:
         print(f'params: {noise}, {l2_norm}')
         for i in range(node):
             model = Qfnn(DEVICE).to(DEVICE)
-            optimizer = pyvacy_optim.DPSGD(
-                params=model.parameters(),
-                lr=LR,
-                batch_size=BATCH_SIZE,
-                noise_multiplier=noise,
-                l2_norm_clip=l2_norm
-            )
+            optimizer = torch.optim.SGD(model.parameters(), lr=LR)
             loss_func = nn.CrossEntropyLoss()
             early_stopping = EarlyStopping(mode='max')
 
@@ -183,14 +108,16 @@ for noise in noise_multipliers:
             )
 
             weights.append(len(data) / all_len)
-
             gmm = GaussianMixture(n_components=5, max_iter=100, random_state=42)
             gmm.fit(data)
             gmm_list.append(gmm)
+
             train_data_set = torch.utils.data.TensorDataset(torch.tensor(data), torch.tensor(labels))
-            train_data_loader = torch.utils.data.DataLoader(dataset=train_data_set,
-                                                            batch_size=BATCH_SIZE,
-                                                            shuffle=True)
+            train_data_loader = torch.utils.data.DataLoader(
+                dataset=train_data_set,
+                batch_size=BATCH_SIZE,
+                shuffle=True
+            )
 
             best_test_acc = 0
             for epoch in range(EPOCH):
@@ -208,20 +135,22 @@ for noise in noise_multipliers:
                     optimizer.zero_grad()
                     loss.backward()
 
+                    # ✅ gradient clipping
                     torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=l2_norm)
 
-                    # Inject quantum noise into gradients
+                    # ✅ add Laplace noise
                     for param in model.parameters():
                         if param.grad is not None:
-                            q_noise = generate_quantum_noise_realistic(param.grad.shape, device=param.grad.device,
-                                                                       scale=noise)
-                            param.grad += q_noise
+                            lap_noise = torch.distributions.Laplace(loc=0.0, scale=l2_norm / noise).sample(param.grad.shape).to(param.grad.device)
+                            param.grad += lap_noise
+
                     optimizer.step()
 
                     avg_loss = sum(train_loss_list[-len(train_data_loader):]) / len(train_data_loader)
                     avg_acc = sum(train_acc_list[-len(train_data_loader):]) / len(train_data_loader)
                     progress_bar.set_postfix(loss=f"{avg_loss:.4f}", acc=f"{avg_acc:.4f}")
 
+                # eval
                 model.eval()
                 test_acc = 0
                 test_samples = 0
@@ -233,7 +162,6 @@ for noise in noise_multipliers:
                         acc = acc_cal(output, y)
                         test_acc += acc * len(y)
                         test_samples += len(y)
-
                 test_acc = test_acc / test_samples
                 test_acc_list.append(test_acc)
 
@@ -241,28 +169,21 @@ for noise in noise_multipliers:
                     break
 
             node_results['accuracies'].append(train_acc_list[-1])
-            node_results['test_accuracies'].append(best_test_acc)
+            node_results['test_accuracies'].append(test_acc_list[-1])  # use last test_acc
 
-            epsilon = moments_accountant(
-                len(train_label),
-                len(data),
-                noise,
-                EPOCH,
-                1e-5
-            )
-            node_results['epsilons'].append(epsilon)
+            # 计算 epsilon（每个 node 用 epoch 次扰动，每次扰动 ε = clip / noise）
+            estimated_epsilon = EPOCH * (l2_norm / noise)
+            node_results['epsilons'].append(estimated_epsilon)
 
-            # 保存训练记录
             torch.save(train_loss_list,
-                       f'../result/data/mni_qffl_dp_qn/noise_{noise}_clip_{l2_norm}_{NAME}_train_loss_n{i}.pt')
+                       f'../result/data/mni_qffl_dp_ln/noise_{noise}_clip_{l2_norm}_{NAME}_train_loss_n{i}.pt')
             torch.save(train_acc_list,
-                       f'../result/data/mni_qffl_dp_qn/noise_{noise}_clip_{l2_norm}_{NAME}_train_acc_n{i}.pt')
+                       f'../result/data/mni_qffl_dp_ln/noise_{noise}_clip_{l2_norm}_{NAME}_train_acc_n{i}.pt')
             torch.save(test_acc_list,
-                       f'../result/data/mni_qffl_dp_qn/noise_{noise}_clip_{l2_norm}_{NAME}_test_acc_n{i}.pt')
+                       f'../result/data/mni_qffl_dp_ln/noise_{noise}_clip_{l2_norm}_{NAME}_test_acc_n{i}.pt')
 
-            # 保存完整模型（非 best，仅最后一轮）
             torch.save(model.state_dict(),
-                       f'../result/model/mni_qffl_dp_qn/last_noise_{noise}_clip_{l2_norm}_{NAME}_n{i}.pth')
+                       f'../result/model/mni_qffl_dp_ln/last_noise_{noise}_clip_{l2_norm}_{NAME}_n{i}.pth')
 
         node_results['final_acc'] = np.mean(node_results['accuracies'])
         node_results['final_test_acc'] = np.mean(node_results['test_accuracies'])
@@ -271,13 +192,13 @@ for noise in noise_multipliers:
         print(f'\nConfiguration Summary - Noise: {noise}, Clip: {l2_norm}')
         print(f"├─ Average Train Accuracy: {node_results['final_acc']:.4f}")
         print(f"├─ Average Test Accuracy:  {node_results['final_test_acc']:.4f}")
-        print(f"└─ Average Privacy Budget ε: {node_results['avg_epsilon']:.4f}\n")
+        print(f"└─ Average Privacy Budget ε: - {node_results['avg_epsilon']:.4f}")
 
-        torch.save(gmm_list, f'../result/data/mni_qffl_dp_qn/noise_{noise}_clip_{l2_norm}_{NAME}_gmm_list')
-        torch.save(weights, f'../result/data/mni_qffl_dp_qn/noise_{noise}_clip_{l2_norm}_{NAME}_data_weights')
-        torch.save(node_results, f'../result/data/mni_qffl_dp_qn/noise_{noise}_clip_{l2_norm}_{NAME}_results')
+        torch.save(gmm_list, f'../result/data/mni_qffl_dp_ln/noise_{noise}_clip_{l2_norm}_{NAME}_gmm_list')
+        torch.save(weights, f'../result/data/mni_qffl_dp_ln/noise_{noise}_clip_{l2_norm}_{NAME}_data_weights')
+        torch.save(node_results, f'../result/data/mni_qffl_dp_ln/noise_{noise}_clip_{l2_norm}_{NAME}_results')
 
-results_dir = '../result/data/mni_qffl_dp_qn'
+results_dir = '../result/data/mni_qffl_dp_ln'
 os.makedirs(results_dir, exist_ok=True)
 with open(f'{results_dir}/{NAME}_results.json', 'w') as f:
     json.dump(results, f, indent=4)

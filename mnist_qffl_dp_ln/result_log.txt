@@ -1,0 +1,197 @@
+/usr/bin/python3 /Users/jon/MyCodes/MyProjects/PythonProjects/my-qffl-dp/mnist_qffl_dp_ln/mnist_QFNN_FL_DP_LN_train.py
+/Users/jon/Library/Python/3.9/lib/python/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+params: 0.01, 1
+
+Configuration Summary - Noise: 0.01, Clip: 1
+├─ Average Train Accuracy: 0.1124
+├─ Average Test Accuracy:  0.0426
+└─ Average Privacy Budget ε: - 1000.0000
+params: 0.01, 5
+
+Configuration Summary - Noise: 0.01, Clip: 5
+├─ Average Train Accuracy: 0.1446
+├─ Average Test Accuracy:  0.0698
+└─ Average Privacy Budget ε: - 5000.0000
+params: 0.01, 10
+
+Configuration Summary - Noise: 0.01, Clip: 10
+├─ Average Train Accuracy: 0.1287
+├─ Average Test Accuracy:  0.1122
+└─ Average Privacy Budget ε: - 10000.0000
+params: 0.01, 20
+
+Configuration Summary - Noise: 0.01, Clip: 20
+├─ Average Train Accuracy: 0.1330
+├─ Average Test Accuracy:  0.0728
+└─ Average Privacy Budget ε: - 20000.0000
+params: 0.05, 1
+
+Configuration Summary - Noise: 0.05, Clip: 1
+├─ Average Train Accuracy: 0.0556
+├─ Average Test Accuracy:  0.0554
+└─ Average Privacy Budget ε: - 200.0000
+params: 0.05, 5
+
+Configuration Summary - Noise: 0.05, Clip: 5
+├─ Average Train Accuracy: 0.0551
+├─ Average Test Accuracy:  0.1087
+└─ Average Privacy Budget ε: - 1000.0000
+params: 0.05, 10
+
+Configuration Summary - Noise: 0.05, Clip: 10
+├─ Average Train Accuracy: 0.2580
+├─ Average Test Accuracy:  0.2529
+└─ Average Privacy Budget ε: - 2000.0000
+params: 0.05, 20
+
+Configuration Summary - Noise: 0.05, Clip: 20
+├─ Average Train Accuracy: 0.1249
+├─ Average Test Accuracy:  0.1095
+└─ Average Privacy Budget ε: - 4000.0000
+params: 0.1, 1
+
+Configuration Summary - Noise: 0.1, Clip: 1
+├─ Average Train Accuracy: 0.0559
+├─ Average Test Accuracy:  0.0528
+└─ Average Privacy Budget ε: - 100.0000
+params: 0.1, 5
+
+Configuration Summary - Noise: 0.1, Clip: 5
+├─ Average Train Accuracy: 0.0009
+├─ Average Test Accuracy:  0.0000
+└─ Average Privacy Budget ε: - 500.0000
+params: 0.1, 10
+
+Configuration Summary - Noise: 0.1, Clip: 10
+├─ Average Train Accuracy: 0.1019
+├─ Average Test Accuracy:  0.0053
+└─ Average Privacy Budget ε: - 1000.0000
+params: 0.1, 20
+
+Configuration Summary - Noise: 0.1, Clip: 20
+├─ Average Train Accuracy: 0.0320
+├─ Average Test Accuracy:  0.0575
+└─ Average Privacy Budget ε: - 2000.0000
+params: 0.2, 1
+
+Configuration Summary - Noise: 0.2, Clip: 1
+├─ Average Train Accuracy: 0.1782
+├─ Average Test Accuracy:  0.1138
+└─ Average Privacy Budget ε: - 50.0000
+params: 0.2, 5
+
+Configuration Summary - Noise: 0.2, Clip: 5
+├─ Average Train Accuracy: 0.1604
+├─ Average Test Accuracy:  0.1661
+└─ Average Privacy Budget ε: - 250.0000
+params: 0.2, 10
+
+Configuration Summary - Noise: 0.2, Clip: 10
+├─ Average Train Accuracy: 0.1433
+├─ Average Test Accuracy:  0.1740
+└─ Average Privacy Budget ε: - 500.0000
+params: 0.2, 20
+
+Configuration Summary - Noise: 0.2, Clip: 20
+├─ Average Train Accuracy: 0.2129
+├─ Average Test Accuracy:  0.1106
+└─ Average Privacy Budget ε: - 1000.0000
+params: 0.5, 1
+
+Configuration Summary - Noise: 0.5, Clip: 1
+├─ Average Train Accuracy: 0.4656
+├─ Average Test Accuracy:  0.4997
+└─ Average Privacy Budget ε: - 20.0000
+params: 0.5, 5
+
+Configuration Summary - Noise: 0.5, Clip: 5
+├─ Average Train Accuracy: 0.2222
+├─ Average Test Accuracy:  0.1174
+└─ Average Privacy Budget ε: - 100.0000
+params: 0.5, 10
+
+Configuration Summary - Noise: 0.5, Clip: 10
+├─ Average Train Accuracy: 0.0997
+├─ Average Test Accuracy:  0.0180
+└─ Average Privacy Budget ε: - 200.0000
+params: 0.5, 20
+
+Configuration Summary - Noise: 0.5, Clip: 20
+├─ Average Train Accuracy: 0.0646
+├─ Average Test Accuracy:  0.0800
+└─ Average Privacy Budget ε: - 400.0000
+params: 1, 1
+
+Configuration Summary - Noise: 1, Clip: 1
+├─ Average Train Accuracy: 0.8986
+├─ Average Test Accuracy:  0.8602
+└─ Average Privacy Budget ε: - 10.0000
+params: 1, 5
+
+Configuration Summary - Noise: 1, Clip: 5
+├─ Average Train Accuracy: 0.3411
+├─ Average Test Accuracy:  0.2326
+└─ Average Privacy Budget ε: - 50.0000
+params: 1, 10
+
+Configuration Summary - Noise: 1, Clip: 10
+├─ Average Train Accuracy: 0.3709
+├─ Average Test Accuracy:  0.2383
+└─ Average Privacy Budget ε: - 100.0000
+params: 1, 20
+
+Configuration Summary - Noise: 1, Clip: 20
+├─ Average Train Accuracy: 0.2234
+├─ Average Test Accuracy:  0.1759
+└─ Average Privacy Budget ε: - 200.0000
+params: 2, 1
+
+Configuration Summary - Noise: 2, Clip: 1
+├─ Average Train Accuracy: 0.9917
+├─ Average Test Accuracy:  0.9875
+└─ Average Privacy Budget ε: - 5.0000
+params: 2, 5
+
+Configuration Summary - Noise: 2, Clip: 5
+├─ Average Train Accuracy: 0.5965
+├─ Average Test Accuracy:  0.5841
+└─ Average Privacy Budget ε: - 25.0000
+params: 2, 10
+
+Configuration Summary - Noise: 2, Clip: 10
+├─ Average Train Accuracy: 0.4595
+├─ Average Test Accuracy:  0.4610
+└─ Average Privacy Budget ε: - 50.0000
+params: 2, 20
+
+Configuration Summary - Noise: 2, Clip: 20
+├─ Average Train Accuracy: 0.2379
+├─ Average Test Accuracy:  0.2340
+└─ Average Privacy Budget ε: - 100.0000
+params: 5, 1
+
+Configuration Summary - Noise: 5, Clip: 1
+├─ Average Train Accuracy: 0.8872
+├─ Average Test Accuracy:  0.8760
+└─ Average Privacy Budget ε: - 2.0000
+params: 5, 5
+
+Configuration Summary - Noise: 5, Clip: 5
+├─ Average Train Accuracy: 0.9799
+├─ Average Test Accuracy:  0.8843
+└─ Average Privacy Budget ε: - 10.0000
+params: 5, 10
+
+Configuration Summary - Noise: 5, Clip: 10
+├─ Average Train Accuracy: 0.7021
+├─ Average Test Accuracy:  0.5571
+└─ Average Privacy Budget ε: - 20.0000
+
+Configuration Summary - Noise: 5, Clip: 20
+├─ Average Train Accuracy: 0.4911
+├─ Average Test Accuracy:  0.4709
+└─ Average Privacy Budget ε: - 40.0000
+Results saved to ../result/data/mni_qffl_dp_ln/mnist_QFNN_laplace_q4_star_results.json
+
+Process finished with exit code 0
