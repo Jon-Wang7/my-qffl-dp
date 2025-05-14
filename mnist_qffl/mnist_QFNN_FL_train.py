@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from mni_QFNN import Qfnn
+from mni_QFNN_qiskit_update import Qfnn
 import numpy as np
 from common.utils import acc_cal, setup_seed
 from torchvision import transforms
