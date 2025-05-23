@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from mni_QFNN_qiskit_update import Qfnn
+from mni_QFNN_qiskit_DS import Qfnn
 import numpy as np
 from common.utils import acc_cal, setup_seed
 from torchvision import transforms
@@ -27,7 +27,6 @@ weights = []
 NAME = f'mnist_QFNN_gas_q4_star'
 node = 9
 
-# keep_list = [[(i+j)%10 for j in range(5)] for i in range(10)]
 keep_list = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [0, 8], [0, 9]]
 for i in range(node):
 
@@ -64,10 +63,8 @@ for i in range(node):
             train_loss_list.append(loss.item())
             acc = acc_cal(output, y)
             train_acc_list.append(acc)
-            # tqdm.write(f'loss:{loss.item()}  acc:{acc}')
             avg_loss = sum(train_loss_list[-len(train_data_loader):]) / len(train_data_loader)
             avg_acc = sum(train_acc_list[-len(train_data_loader):]) / len(train_data_loader)
-            # print(f'[Summary] node:{i} epoch:{epoch} - avg_loss:{avg_loss:.4f} avg_acc:{avg_acc:.4f}')
             progress_bar.set_postfix(loss=f"{avg_loss:.4f}", acc=f"{avg_acc:.4f}")
 
             optimizer.zero_grad()

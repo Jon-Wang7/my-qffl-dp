@@ -1,5 +1,3 @@
-import pennylane as qml
-
 import numpy as np
 
 import torch
@@ -16,45 +14,78 @@ defuzz_qubits = n_qubits
 defuzz_layer = 2
 
 
-class LearnableQiskitCircuit(nn.Module):
+class LearnableTnorm(nn.Module):
     def __init__(self):
         super().__init__()
-        self.theta = nn.Parameter(torch.randn(n_qubits))  # learnable scaling
-        self.bias = nn.Parameter(torch.randn(n_qubits))   # learnable bias
+        self.theta = nn.Parameter(torch.randn(n_qubits))
+        self.shift = np.pi / 2
 
-    def forward(self, input_tensor):
+    def forward(self, inputs):
         results = []
-        for input_vec in input_tensor:
-            input_vec = input_vec.detach().cpu().numpy()
-            theta_vals = self.theta.detach().cpu().numpy()
-            bias_vals = self.bias.detach().cpu().numpy()
-            qc = QuantumCircuit(5)
+        for input_vec in inputs:
+            probs_list = []
+            for i in range(n_qubits):
+                shifted_pos = self.theta.detach().clone()
+                shifted_neg = self.theta.detach().clone()
+                shifted_pos[i] += self.shift
+                shifted_neg[i] -= self.shift
+
+                prob_pos = self._run_circuit(input_vec, shifted_pos)
+                prob_neg = self._run_circuit(input_vec, shifted_neg)
+                grad = (prob_pos - prob_neg) / 2
+                probs_list.append((prob_pos + prob_neg) / 2)
+            avg_probs = torch.stack(probs_list, dim=0).mean(dim=0)
+            results.append(avg_probs)
+        return torch.stack(results, dim=0).to(inputs.device).requires_grad_()
+
+    def _run_circuit(self, input_vec, theta_vals):
+        qc = QuantumCircuit(5)
+        input_vec = input_vec.detach().cpu().numpy()
+        for i in range(n_qubits):
+            angle = theta_vals[i].item() * input_vec[i]
+            qc.ry(angle, i)
+        qc.ccx(0, 1, 3)
+        qc.ccx(2, 3, 4)
+        sv = Statevector.from_instruction(qc)
+        probs = sv.probabilities()
+        return torch.tensor(probs, dtype=torch.float32)
+
+
+class LearnableDefuzz(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.theta = nn.Parameter(torch.randn(3))
+        self.shift = np.pi / 2
+
+    def forward(self, input_vec):
+        results = []
+        for _ in input_vec:
+            gradients = []
+            outputs = []
             for i in range(3):
-                angle = theta_vals[i] * input_vec[i] + bias_vals[i]
-                qc.ry(angle, i)
-            qc.ccx(0, 1, 3)
-            qc.ccx(2, 3, 4)
-            sv = Statevector.from_instruction(qc)
-            probs = sv.probabilities()
-            results.append(probs)
-        return torch.tensor(np.array(results), dtype=torch.float32)
+                shifted_theta_pos = self.theta.detach().clone()
+                shifted_theta_neg = self.theta.detach().clone()
+                shifted_theta_pos[i] += self.shift
+                shifted_theta_neg[i] -= self.shift
 
+                probs_pos = self._run_circuit(shifted_theta_pos)
+                probs_neg = self._run_circuit(shifted_theta_neg)
+                grad_i = (probs_pos - probs_neg) / 2
+                gradients.append(grad_i)
+                outputs.append((probs_pos + probs_neg) / 2)
 
-dev2 = qml.device('default.qubit', wires=defuzz_qubits)
+            avg_out = torch.stack(outputs, dim=0).mean(dim=0)
+            results.append(avg_out)
 
+        return torch.stack(results, dim=0).to(input_vec.device).requires_grad_()
 
-@qml.qnode(dev2, interface='torch', diff_method='backprop')
-def q_defuzz(inputs, weights=None):
-    qml.AmplitudeEmbedding(inputs, wires=range(defuzz_qubits), normalize=True)
-    for i in range(defuzz_layer):
-        for j in range(defuzz_qubits - 1):
-            qml.CNOT(wires=[j, j + 1])
-        qml.CNOT(wires=[defuzz_qubits - 1, 0])
-        for j in range(defuzz_qubits):
-            qml.RX(weights[i, 3 * j], wires=j)
-            qml.RZ(weights[i, 3 * j + 1], wires=j)
-            qml.RX(weights[i, 3 * j + 2], wires=j)
-    return [qml.expval(qml.PauliZ(j)) for j in range(defuzz_qubits)]
+    def _run_circuit(self, theta_vals):
+        qc = QuantumCircuit(3)
+        for i in range(3):
+            qc.ry(theta_vals[i].item(), i)
+        sv = Statevector.from_instruction(qc)
+        probs = sv.probabilities()
+        return torch.tensor([probs[0], probs[1], probs[2]], dtype=torch.float32)
 
 
 weight_shapes = {"weights": (1, 1)}
@@ -78,14 +109,14 @@ class Qfnn(nn.Module):
         self.m = nn.Parameter(torch.randn(n_qubits, n_fuzzy_mem))
         self.theta = nn.Parameter(torch.randn(n_qubits, n_fuzzy_mem))
         # self.linear2=nn.Linear(n_fuzzy_mem**n_qubits,10)
-        self.softmax_linear = nn.Linear(defuzz_qubits, 10)
+        self.softmax_linear = nn.Linear(n_fuzzy_mem ** n_qubits, 10)
         self.gn = nn.GroupNorm(1, n_qubits)
         self.gn2 = nn.BatchNorm1d(n_fuzzy_mem ** n_qubits)
         self.apply(weights_init)
 
         # self.qlayer = qml.qnn.TorchLayer(q_tnorm_node, weight_shapes)
-        self.defuzz = qml.qnn.TorchLayer(q_defuzz, defuzz_weight_shapes)
-        self.qiskit_circuit = LearnableQiskitCircuit()
+        self.defuzz = LearnableDefuzz()
+        self.tnorm = LearnableTnorm()
 
     def forward(self, x):
         device = self.device
@@ -123,7 +154,7 @@ class Qfnn(nn.Module):
             q_in = 2 * torch.arcsin(sq)
             # q_in=q_in.clone()
             # Q_tnorm_out = self.qlayer(q_in)[:, 1]
-            Q_tnorm_probs = self.qiskit_circuit(q_in)
+            Q_tnorm_probs = self.tnorm(q_in)
             Q_tnorm_out = Q_tnorm_probs[:, 1]
             q_out.append(Q_tnorm_out)
             # 将q_in的每一列相乘
@@ -135,8 +166,8 @@ class Qfnn(nn.Module):
         out = self.gn2(out)
 
         # out=self.linear2(out)
-        defuzz_out = self.defuzz(out)
-        out = self.softmax_linear(defuzz_out)
+        out = self.softmax_linear(out)
+        out = self.defuzz(out)
         return out
 
 # if __name__ == "__main__":

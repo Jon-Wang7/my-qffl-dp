@@ -1,10 +1,7 @@
-import numpy as np
+import pennylane as qml
 
 import torch
 import torch.nn as nn
-
-from qiskit import QuantumCircuit
-from qiskit.quantum_info import Statevector
 
 n_qubits = 3
 
@@ -13,46 +10,33 @@ n_fuzzy_mem = 2
 defuzz_qubits = n_qubits
 defuzz_layer = 2
 
+dev1 = qml.device('default.qubit', wires=2 * n_qubits - 1)
 
-def q_tnorm_node(inputs):
-    results = []
-    for input_vec in inputs:
-        input_vec = input_vec.detach().cpu().numpy()
-        qc = QuantumCircuit(5)
-        for i in range(3):
-            qc.ry(input_vec[i], i)
-        qc.ccx(0, 1, 3)
-        qc.ccx(2, 3, 4)
-        sv = Statevector.from_instruction(qc)
-        probs = sv.probabilities()
-        results.append(probs)
-    return torch.tensor(np.array(results), dtype=torch.float32)
 
-def q_defuzz(inputs):
-    results = []
-    for input_vec in inputs:
-        input_vec = input_vec.detach().cpu().numpy()
+@qml.qnode(dev1, interface='torch', diff_method='backprop')
+def q_tnorm_node(inputs, weights=None):
+    qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation='Y')
+    qml.Toffoli(wires=[0, 1, n_qubits])
+    for i in range(n_qubits - 2):
+        qml.Toffoli(wires=[i + 2, n_qubits + i, i + n_qubits + 1])
+    return qml.probs(wires=2 * n_qubits - 2)
 
-        # 只取前 3 个作为输入（代表 low/med/high）
-        vec3 = input_vec[:3]
 
-        qc = QuantumCircuit(3)
-        for i in range(3):
-            qc.ry(vec3[i], i)  # 用 RY 角度编码每个 fuzzy 概念
+dev2 = qml.device('default.qubit', wires=defuzz_qubits)
 
-        # 可选 entanglement（略）
-        # qc.cx(0, 1)
-        # qc.cx(1, 2)
 
-        sv = Statevector.from_instruction(qc)
-        probs = sv.probabilities()  # 长度 = 8
-
-        # 只取前三个 basis 状态 |000>, |001>, |010> 作为 low/med/high 的概率
-        # 对应状态索引：0 (000), 1 (001), 2 (010)
-        defuzzed = [probs[0], probs[1], probs[2]]
-        results.append(defuzzed)
-
-    return torch.from_numpy(np.array(results)).float().to(inputs.device).requires_grad_()
+@qml.qnode(dev2, interface='torch', diff_method='backprop')
+def q_defuzz(inputs, weights=None):
+    qml.AmplitudeEmbedding(inputs, wires=range(defuzz_qubits), normalize=True)
+    for i in range(defuzz_layer):
+        for j in range(defuzz_qubits - 1):
+            qml.CNOT(wires=[j, j + 1])
+        qml.CNOT(wires=[defuzz_qubits - 1, 0])
+        for j in range(defuzz_qubits):
+            qml.RX(weights[i, 3 * j], wires=j)
+            qml.RZ(weights[i, 3 * j + 1], wires=j)
+            qml.RX(weights[i, 3 * j + 2], wires=j)
+    return [qml.expval(qml.PauliZ(j)) for j in range(defuzz_qubits)]
 
 
 weight_shapes = {"weights": (1, 1)}
@@ -76,13 +60,13 @@ class Qfnn(nn.Module):
         self.m = nn.Parameter(torch.randn(n_qubits, n_fuzzy_mem))
         self.theta = nn.Parameter(torch.randn(n_qubits, n_fuzzy_mem))
         # self.linear2=nn.Linear(n_fuzzy_mem**n_qubits,10)
-        self.softmax_linear = nn.Linear(n_fuzzy_mem ** n_qubits, 10)
+        self.softmax_linear = nn.Linear(defuzz_qubits, 10)
         self.gn = nn.GroupNorm(1, n_qubits)
         self.gn2 = nn.BatchNorm1d(n_fuzzy_mem ** n_qubits)
         self.apply(weights_init)
 
-        # self.qlayer = qml.qnn.TorchLayer(q_tnorm_node, weight_shapes)
-        self.defuzz = lambda x: q_defuzz(x)
+        self.qlayer = qml.qnn.TorchLayer(q_tnorm_node, weight_shapes)
+        self.defuzz = qml.qnn.TorchLayer(q_defuzz, defuzz_weight_shapes)
 
     def forward(self, x):
         device = self.device
@@ -119,9 +103,7 @@ class Qfnn(nn.Module):
             sq = torch.clamp(sq, -0.99999, 0.99999)
             q_in = 2 * torch.arcsin(sq)
             # q_in=q_in.clone()
-            # Q_tnorm_out = self.qlayer(q_in)[:, 1]
-            Q_tnorm_probs = q_tnorm_node(q_in)
-            Q_tnorm_out = Q_tnorm_probs[:, 1]
+            Q_tnorm_out = self.qlayer(q_in)[:, 1]
             q_out.append(Q_tnorm_out)
             # 将q_in的每一列相乘
             # out_cheng=torch.prod(q_in,dim=1)
@@ -132,8 +114,8 @@ class Qfnn(nn.Module):
         out = self.gn2(out)
 
         # out=self.linear2(out)
-        out = self.softmax_linear(out)
-        out = self.defuzz(out)
+        defuzz_out = self.defuzz(out)
+        out = self.softmax_linear(defuzz_out)
         return out
 
 # if __name__ == "__main__":

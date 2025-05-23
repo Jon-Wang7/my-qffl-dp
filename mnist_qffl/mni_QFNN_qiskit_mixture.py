@@ -1,10 +1,9 @@
-import numpy as np
-
 import torch
 import torch.nn as nn
 
+import pennylane as qml
+
 from qiskit import QuantumCircuit
-from qiskit.quantum_info import Statevector
 
 n_qubits = 3
 
@@ -15,44 +14,54 @@ defuzz_layer = 2
 
 
 def q_tnorm_node(inputs):
-    results = []
-    for input_vec in inputs:
-        input_vec = input_vec.detach().cpu().numpy()
+    def build_circuit(input_vec):
         qc = QuantumCircuit(5)
         for i in range(3):
             qc.ry(input_vec[i], i)
         qc.ccx(0, 1, 3)
         qc.ccx(2, 3, 4)
-        sv = Statevector.from_instruction(qc)
-        probs = sv.probabilities()
-        results.append(probs)
-    return torch.tensor(np.array(results), dtype=torch.float32)
+        return qc
 
-def q_defuzz(inputs):
+    dev = qml.device("default.qubit", wires=[0, 1, 2, 3, 4])
+
+    def qnode(x):
+        circuit = build_circuit(x)
+        qml_circuit = qml.from_qiskit(circuit, wires=[0, 1, 2, 3, 4])
+        return qml.probs(wires=range(5))
+
+    wrapped = qml.QNode(qnode, dev, interface="torch")
+
     results = []
     for input_vec in inputs:
         input_vec = input_vec.detach().cpu().numpy()
+        result = wrapped(input_vec)
+        results.append(result)
 
-        # 只取前 3 个作为输入（代表 low/med/high）
-        vec3 = input_vec[:3]
+    return torch.stack(results).to(inputs.device)
 
+def q_defuzz(inputs):
+    def build_circuit(input_vec):
         qc = QuantumCircuit(3)
         for i in range(3):
-            qc.ry(vec3[i], i)  # 用 RY 角度编码每个 fuzzy 概念
+            qc.ry(input_vec[i], i)
+        return qc
 
-        # 可选 entanglement（略）
-        # qc.cx(0, 1)
-        # qc.cx(1, 2)
+    dev = qml.device("default.qubit", wires=[0, 1, 2])
 
-        sv = Statevector.from_instruction(qc)
-        probs = sv.probabilities()  # 长度 = 8
+    def qnode(x):
+        circuit = build_circuit(x)
+        qml_circuit = qml.from_qiskit(circuit, wires=[0, 1, 2])
+        return qml.probs(wires=range(3))
 
-        # 只取前三个 basis 状态 |000>, |001>, |010> 作为 low/med/high 的概率
-        # 对应状态索引：0 (000), 1 (001), 2 (010)
-        defuzzed = [probs[0], probs[1], probs[2]]
-        results.append(defuzzed)
+    wrapped = qml.QNode(qnode, dev, interface="torch")
 
-    return torch.from_numpy(np.array(results)).float().to(inputs.device).requires_grad_()
+    results = []
+    for input_vec in inputs:
+        input_vec = input_vec.detach().cpu().numpy()
+        result = wrapped(input_vec)
+        results.append(result)
+
+    return torch.stack(results).to(inputs.device)
 
 
 weight_shapes = {"weights": (1, 1)}
