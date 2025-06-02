@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from mni_QFNN_qiskit_DS import Qfnn
+from mni_QFNN import Qfnn
 import numpy as np
 from common.utils import acc_cal, setup_seed
 from torchvision import transforms
@@ -25,9 +25,9 @@ gmm_list = []
 weights = []
 
 NAME = f'mnist_QFNN_gas_q4_star'
-node = 9
+node = 5
 
-keep_list = [[0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6], [0, 7], [0, 8], [0, 9]]
+keep_list = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9]]
 for i in range(node):
 
     model = Qfnn(DEVICE).to(DEVICE)

@@ -1,9 +1,7 @@
-import torch
-import torch.nn as nn
-
 import pennylane as qml
 
-from qiskit import QuantumCircuit
+import torch
+import torch.nn as nn
 
 n_qubits = 3
 
@@ -12,60 +10,48 @@ n_fuzzy_mem = 2
 defuzz_qubits = n_qubits
 defuzz_layer = 2
 
+dev1 = qml.device('default.qubit', wires=2 * n_qubits - 1)
 
-def q_tnorm_node(inputs):
-    def build_circuit(input_vec):
-        qc = QuantumCircuit(5)
-        for i in range(3):
-            qc.ry(input_vec[i], i)
-        qc.ccx(0, 1, 3)
-        qc.ccx(2, 3, 4)
-        return qc
 
-    dev = qml.device("default.qubit", wires=[0, 1, 2, 3, 4])
+@qml.qnode(dev1, interface='torch', diff_method='backprop')
+def q_tnorm_node(inputs, weights=None):
+    qml.AngleEmbedding(inputs, wires=range(n_qubits), rotation='Y')
+    qml.Toffoli(wires=[0, 1, n_qubits])
+    for i in range(n_qubits - 2):
+        qml.Toffoli(wires=[i + 2, n_qubits + i, i + n_qubits + 1])
+    return qml.probs(wires=2 * n_qubits - 2)
 
-    def qnode(x):
-        circuit = build_circuit(x)
-        qml_circuit = qml.from_qiskit(circuit, wires=[0, 1, 2, 3, 4])
-        return qml.probs(wires=range(5))
 
-    wrapped = qml.QNode(qnode, dev, interface="torch")
+dev2 = qml.device('default.qubit', wires=defuzz_qubits)
 
-    results = []
-    for input_vec in inputs:
-        input_vec = input_vec.detach().cpu().numpy()
-        result = wrapped(input_vec)
-        results.append(result)
 
-    return torch.stack(results).to(inputs.device)
-
-def q_defuzz(inputs):
-    def build_circuit(input_vec):
-        qc = QuantumCircuit(3)
-        for i in range(3):
-            qc.ry(input_vec[i], i)
-        return qc
-
-    dev = qml.device("default.qubit", wires=[0, 1, 2])
-
-    def qnode(x):
-        circuit = build_circuit(x)
-        qml_circuit = qml.from_qiskit(circuit, wires=[0, 1, 2])
-        return qml.probs(wires=range(3))
-
-    wrapped = qml.QNode(qnode, dev, interface="torch")
-
-    results = []
-    for input_vec in inputs:
-        input_vec = input_vec.detach().cpu().numpy()
-        result = wrapped(input_vec)
-        results.append(result)
-
-    return torch.stack(results).to(inputs.device)
+@qml.qnode(dev2, interface='torch', diff_method='backprop')
+def q_defuzz(inputs, weights=None):
+    qml.AmplitudeEmbedding(inputs, wires=range(defuzz_qubits), normalize=True)
+    for i in range(defuzz_layer):
+        for j in range(defuzz_qubits - 1):
+            qml.CNOT(wires=[j, j + 1])
+        qml.CNOT(wires=[defuzz_qubits - 1, 0])
+        for j in range(defuzz_qubits):
+            qml.RX(weights[i, 3 * j], wires=j)
+            qml.RZ(weights[i, 3 * j + 1], wires=j)
+            qml.RX(weights[i, 3 * j + 2], wires=j)
+    return [qml.expval(qml.PauliZ(j)) for j in range(defuzz_qubits)]
 
 
 weight_shapes = {"weights": (1, 1)}
 defuzz_weight_shapes = {"weights": (defuzz_layer, 3 * defuzz_qubits)}
+
+class GaussianNoiseLayer(nn.Module):
+    def __init__(self, sigma=0.1):
+        super().__init__()
+        self.sigma = sigma
+
+    def forward(self, x):
+        if self.training:
+            return x + torch.randn_like(x) * self.sigma
+        else:
+            return x
 
 
 def weights_init(m):
@@ -77,21 +63,22 @@ def weights_init(m):
 
 
 class Qfnn(nn.Module):
-    def __init__(self, device) -> None:
+    def __init__(self, device, sigma=0.1) -> None:
         super(Qfnn, self).__init__()
         self.device = device
         self.linear = nn.Linear(10, n_qubits)
+        self.noise_layer = GaussianNoiseLayer(sigma)
         self.dropout = nn.Dropout(0.5)
         self.m = nn.Parameter(torch.randn(n_qubits, n_fuzzy_mem))
         self.theta = nn.Parameter(torch.randn(n_qubits, n_fuzzy_mem))
         # self.linear2=nn.Linear(n_fuzzy_mem**n_qubits,10)
-        self.softmax_linear = nn.Linear(n_fuzzy_mem ** n_qubits, 10)
+        self.softmax_linear = nn.Linear(defuzz_qubits, 10)
         self.gn = nn.GroupNorm(1, n_qubits)
         self.gn2 = nn.BatchNorm1d(n_fuzzy_mem ** n_qubits)
         self.apply(weights_init)
 
-        # self.qlayer = qml.qnn.TorchLayer(q_tnorm_node, weight_shapes)
-        self.defuzz = lambda x: q_defuzz(x)
+        self.qlayer = qml.qnn.TorchLayer(q_tnorm_node, weight_shapes)
+        self.defuzz = qml.qnn.TorchLayer(q_defuzz, defuzz_weight_shapes)
 
     def forward(self, x):
         device = self.device
@@ -128,9 +115,7 @@ class Qfnn(nn.Module):
             sq = torch.clamp(sq, -0.99999, 0.99999)
             q_in = 2 * torch.arcsin(sq)
             # q_in=q_in.clone()
-            # Q_tnorm_out = self.qlayer(q_in)[:, 1]
-            Q_tnorm_probs = q_tnorm_node(q_in)
-            Q_tnorm_out = Q_tnorm_probs[:, 1]
+            Q_tnorm_out = self.qlayer(q_in)[:, 1]
             q_out.append(Q_tnorm_out)
             # 将q_in的每一列相乘
             # out_cheng=torch.prod(q_in,dim=1)
@@ -141,8 +126,8 @@ class Qfnn(nn.Module):
         out = self.gn2(out)
 
         # out=self.linear2(out)
-        out = self.softmax_linear(out)
-        out = self.defuzz(out)
+        defuzz_out = self.defuzz(out)
+        out = self.softmax_linear(defuzz_out)
         return out
 
 # if __name__ == "__main__":

@@ -13,8 +13,8 @@ node = 5
 test_data = torch.load('../data/mnist/test_data.pkl').to(DEVICE)[:2000]
 label = torch.load('../data/mnist/test_label.pkl').to(DEVICE)[:2000]
 
-gmm_list = torch.load(f'../result/data/mni_qffl/{NAME}_gmm_list', weights_only=False)
-data_weights = torch.load(f'../result/data/mni_qffl/{NAME}_data_weights')
+gmm_list = torch.load(f'../result/data/mni_qffl_cl/{NAME}_gmm_list', weights_only=False)
+data_weights = torch.load(f'../result/data/mni_qffl_cl/{NAME}_data_weights')
 gmm_scores = []
 for i in range(node):
     gmm_scores.append(gmm_list[i].score_samples(test_data.cpu().numpy()))
@@ -31,7 +31,7 @@ out_put = []
 
 for i in tqdm(range(node)):
     model = Qfnn(DEVICE).to(DEVICE)
-    model.load_state_dict(torch.load(f'../result/model/mni_qffl/{NAME}_n{i}.pth'))
+    model.load_state_dict(torch.load(f'../result/model/mni_qffl_cl/{NAME}_n{i}.pth'))
     model.eval()
     with torch.no_grad():
         out_put.append(model(test_data))
@@ -54,7 +54,7 @@ f1 = f1_score(label, pred, average='macro')
 print(f'acc:{acc} precision:{precision} recall:{recall} f1:{f1}')
 cm = confusion_matrix(label, pred)
 # === 保存预测结果和融合权重（用于隐私评估） ===
-torch.save(output, '../result/data/mni_qffl/output_probs.pt')  # [batch, class]
-torch.save(gmm_scores, '../result/data/mni_qffl/lambda_weights.pt')  # [batch, node]
+torch.save(output, '../result/data/mni_qffl_cl/output_probs.pt')  # [batch, class]
+torch.save(gmm_scores, '../result/data/mni_qffl_cl/lambda_weights.pt')  # [batch, node]
 
 print("预测输出和 GMM 权重已保存！")
